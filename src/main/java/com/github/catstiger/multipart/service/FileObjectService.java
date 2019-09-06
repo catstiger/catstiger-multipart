@@ -17,9 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.github.catstiger.common.sql.BaseEntity;
-import com.github.catstiger.common.sql.JdbcTemplateProxy;
+import com.github.catstiger.common.sql.SQLExecutor;
 import com.github.catstiger.common.sql.SQLReady;
 import com.github.catstiger.common.sql.SQLRequest;
+import com.github.catstiger.common.sql.mapper.Mappers;
 import com.github.catstiger.common.util.Exceptions;
 import com.github.catstiger.multipart.model.FileObject;
 import com.github.catstiger.multipart.service.impl.AbstractFileService;
@@ -30,7 +31,7 @@ public class FileObjectService{
 	private static Logger logger = LoggerFactory.getLogger(FileObjectService.class);
 	
 	@Autowired
-	private JdbcTemplateProxy jdbcTemplate;
+	private SQLExecutor sqlExecutor;
 	@Autowired
 	private FileService fileService;
 	
@@ -41,17 +42,16 @@ public class FileObjectService{
 	 * @param file      需要保存的文件
 	 * @param filename  文件原名
 	 * @param extraMsg  附加信息，通常是当前登录人的用户名，用于构建目录，可以为<code>null</code>， 此时文件将存储在临时目录
-	 * @param targetCls 宿主对象Class名
-	 * @param targetId  宿主对象ID
+	 *
 	 */
 	@Transactional
-	public FileObject create(File file, String filename, String extraMsg, String targetCls, String targetId){
+	public FileObject create(File file, String filename, String extraMsg){
 		if (file == null || !file.exists() || !file.isFile() || file.length() <= 0L) {
 			throw Exceptions.unchecked("请上传一个正确的文件！");
 		}
 
 		String url = fileService.save(file, filename, extraMsg);
-		return createFileObject(file, url, filename, extraMsg, targetCls, targetId);
+		return createFileObject(file, url, filename, extraMsg);
 	}
 
 	/**
@@ -61,17 +61,16 @@ public class FileObjectService{
 	 * @param url       文件url
 	 * @param filename  文件原名
 	 * @param extraMsg  附加信息，通常是当前登录人的用户名，用于构建目录，可以为<code>null</code>， 此时文件将存储在临时目录
-	 * @param targetCls 宿主对象Class名
-	 * @param targetId  宿主对象ID
+	
 	 * @return
 	 */
 	@Transactional
-	public FileObject create(File file, String url, String filename, String extraMsg, String targetCls, String targetId){
+	public FileObject create(File file, String url, String filename, String extraMsg){
 		if (file == null || !file.exists() || !file.isFile() || file.length() <= 0L) {
 			throw Exceptions.unchecked("请上传一个正确的文件！");
 		}
 
-		return createFileObject(file, url, filename, extraMsg, targetCls, targetId);
+		return createFileObject(file, url, filename, extraMsg);
 	}
 
 	/**
@@ -85,7 +84,9 @@ public class FileObjectService{
 		Preconditions.checkNotNull(targetClass);
 		Preconditions.checkNotNull(targetId);
 
-		SQLReady sql = new SQLRequest(FileObject.class, true).select().append(" WHERE target_id = ?", targetId.toString()).append(" AND(target_class=? OR target_class=? ",
+		SQLReady sql = new SQLRequest(FileObject.class, true).select()
+		    .append(" WHERE target_id = ?", targetId.toString())
+		    .append(" AND(target_class=? OR target_class=? ",
 				new Object[] { targetClass.getName(), targetClass.getSimpleName() });
 
 		// 兼容使用表名作为targetClass
@@ -94,7 +95,7 @@ public class FileObjectService{
 			sql.append(" OR target_class=? ", StringUtils.replace(table.name().toUpperCase(), "T_", ""));
 		}
 		sql.append(") order by name asc");
-		return jdbcTemplate.query(sql.getSql(), new BeanPropertyRowMapper<FileObject>(FileObject.class), sql.getArgs());
+		return sqlExecutor.query(sql.getSql(), new BeanPropertyRowMapper<FileObject>(FileObject.class), sql.getArgs());
 	}
 
 	/**
@@ -107,10 +108,10 @@ public class FileObjectService{
 	public List<FileObject> listByOwner(String targetClass, String targetId){
 		Preconditions.checkNotNull(targetClass);
 		Preconditions.checkNotNull(targetId);
-		SQLReady sql = new SQLRequest(FileObject.class, true).select().append(" WHERE target_id = ?", targetId).append(" AND target_class=?", targetClass);
-
-		sql.append(" order by name asc");
-		return jdbcTemplate.query(sql.getSql(), new BeanPropertyRowMapper<FileObject>(FileObject.class), sql.getArgs());
+		SQLReady sql = new SQLRequest(FileObject.class, true).select()
+		    .where("target_id = ? AND target_class=?", targetId, targetClass)
+		    .orderBy("name", SQLReady.ASC);
+		return sqlExecutor.query(sql.getSql(), new BeanPropertyRowMapper<FileObject>(FileObject.class), sql.getArgs());
 	}
 
 	/**
@@ -123,8 +124,11 @@ public class FileObjectService{
 		Preconditions.checkArgument(targetEntity != null && targetEntity.getId() != null, "Entity id is required.");
 		Long targetId = targetEntity.getId();
 
-		SQLReady sql = new SQLRequest(FileObject.class, true).select().append(" WHERE target_id = ?", targetId.toString()).append(" AND target_class=? ", targetEntity.getClass().getSimpleName());
-		return jdbcTemplate.query(sql.getSql(), new BeanPropertyRowMapper<FileObject>(FileObject.class), sql.getArgs());
+		SQLReady sql = new SQLRequest(FileObject.class, true).select()
+		    .where(" target_id = ?", targetId.toString())
+		    .and(" target_class=? ", targetEntity.getClass().getSimpleName());
+		
+		return sqlExecutor.query(sql.getSql(), new BeanPropertyRowMapper<FileObject>(FileObject.class), sql.getArgs());
 	}
 
 	/**
@@ -140,7 +144,8 @@ public class FileObjectService{
 				fileService.delete(fo.getUrl());
 			}
 		}
-		jdbcTemplate.update("delete from file_object where target_class=? and target_id=?", targetEntity.getClass().getSimpleName(), targetEntity.getId());
+		sqlExecutor.update("delete from file_object where target_class=? and target_id=?", 
+		    targetEntity.getClass().getSimpleName(), targetEntity.getId());
 	}
 
 	/**
@@ -159,7 +164,8 @@ public class FileObjectService{
 				fileService.delete(fo.getUrl());
 			}
 		}
-		jdbcTemplate.update("delete from file_object where  (target_class=? or target_class=?) and target_id=?", targetClass.getSimpleName(), targetClass.getName(), targetId.toString());
+		sqlExecutor.update("delete from file_object where  (target_class=? or target_class=?) and target_id=?", 
+		    targetClass.getSimpleName(), targetClass.getName(), targetId.toString());
 	}
 
 	/**
@@ -171,7 +177,9 @@ public class FileObjectService{
 	 * @param targetId    目标宿主ID
 	 * @param targetExtra 目标extra
 	 * @return 目标宿主的文件
+	 * @deprecated 没啥卵用
 	 */
+	@Deprecated
 	public List<FileObject> copyFilesByOwners(Class<?> sourceClass, Long sourceId, Class<?> targetClass, Long targetId, String targetExtra){
 		List<FileObject> fos = listByOwner(sourceClass, sourceId);
 		List<FileObject> targetFos = new ArrayList<FileObject>();
@@ -188,7 +196,7 @@ public class FileObjectService{
 				targetFo.setSize(fo.getSize());
 				targetFo.setSizeStr(fo.getSizeStr());
 				SQLReady sql = new SQLRequest(FileObject.class).entity(targetFo).insertNonNull();
-				jdbcTemplate.update(sql.getSql(), sql.getArgs());
+				sqlExecutor.update(sql.getSql(), sql.getArgs());
 
 				targetFos.addAll(targetFos);
 			}
@@ -205,7 +213,9 @@ public class FileObjectService{
 	 * @param targetId          目标宿主ID
 	 * @param targetExtra       目标extra
 	 * @return 目标宿主的文件
+	 * @deprecated 没啥卵用
 	 */
+	@Deprecated
 	public List<FileObject> copyFilesByOwners(List<FileObject> sourceFileObjects, Class<?> targetClass, Long targetId, String targetExtra){
 		List<FileObject> targetFos = new ArrayList<FileObject>();
 
@@ -221,7 +231,7 @@ public class FileObjectService{
 				targetFo.setSize(fo.getSize());
 				targetFo.setSizeStr(fo.getSizeStr());
 				SQLReady sql = new SQLRequest(FileObject.class).entity(targetFo).insertNonNull();
-				jdbcTemplate.update(sql.getSql(), sql.getArgs());
+				sqlExecutor.update(sql.getSql(), sql.getArgs());
 
 				targetFos.addAll(targetFos);
 			}
@@ -246,7 +256,7 @@ public class FileObjectService{
 
 			for (String id : ids) {
 				logger.debug("Adjoin file {}, {}", id, targetId);
-				jdbcTemplate.update("update file_object set target_id=? where url=?", targetId, id);
+				sqlExecutor.update("update file_object set target_id=? where url=?", targetId, id);
 			}
 		}
 	}
@@ -263,7 +273,8 @@ public class FileObjectService{
 		Preconditions.checkArgument(StringUtils.isNotBlank(url));
 		Preconditions.checkArgument(entity != null && entity.getId() != null, "Entity id is required.");
 
-		jdbcTemplate.update("update file_object set target_id=?, target_class=? where url=?", entity.getId().toString(), entity.getClass().getSimpleName(), url);
+		sqlExecutor.update("update file_object set target_id=?, target_class=? where url=?",
+		    entity.getId().toString(), entity.getClass().getSimpleName(), url);
 	}
 
 	/**
@@ -280,7 +291,7 @@ public class FileObjectService{
 		Preconditions.checkArgument(StringUtils.isNotBlank(targetClass));
 		Preconditions.checkArgument(StringUtils.isNotBlank(targetId));
 
-		jdbcTemplate.update("update file_object set target_id=?, target_class=? where url=?", targetId, targetClass, url);
+		sqlExecutor.update("update file_object set target_id=?, target_class=? where url=?", targetId, targetClass, url);
 	}
 
 	/**
@@ -288,7 +299,7 @@ public class FileObjectService{
 	 */
 	public void remove(String url){
 		fileService.delete(url);
-		jdbcTemplate.update("delete from file_object where url=?", url);
+		sqlExecutor.update("delete from file_object where url=?", url);
 	}
 
 	/**
@@ -297,7 +308,8 @@ public class FileObjectService{
 	 * @param url 给出URL
 	 */
 	public FileObject get(String url){
-		return jdbcTemplate.get(FileObject.class, "url", url);
+	  SQLReady sqlReady = SQLReady.select(FileObject.class).where("url=?", url);
+		return sqlExecutor.first(sqlReady.getSql(), Mappers.byClass(FileObject.class), sqlReady.getArgs());
 	}
 
 	public FileService getFileService(){
@@ -311,24 +323,23 @@ public class FileObjectService{
 	 * @param url       访问文件的url
 	 * @param filename  文件名
 	 * @param userName  当前用户
-	 * @param targetCls 目标类
-	 * @param targetId  目标实体id
+	
 	 * @return
 	 */
-	private FileObject createFileObject(File file, String url, String filename, String userName, String targetCls, String targetId){
+	private FileObject createFileObject(File file, String url, String filename, String extraMsg){
 		FileObject fileObject = new FileObject();
 		fileObject.setUrl(url);
 		fileObject.setName(filename);
-		fileObject.setCreator(userName);
+		fileObject.setCreator(extraMsg);
 		fileObject.setExt(org.springframework.util.StringUtils.getFilenameExtension(url));
 		fileObject.setSize(file.length());
 		fileObject.setSizeStr(AbstractFileService.getSizeString(file.length()));
-		fileObject.setTargetClass(targetCls);
-		fileObject.setTargetId(targetId);
+		//fileObject.setTargetClass(targetCls);
+		//fileObject.setTargetId(targetId);
 		fileObject.setCreateTime(new Date());
 
 		SQLReady sql = new SQLRequest(FileObject.class, true).entity(fileObject).insertNonNull();
-		jdbcTemplate.update(sql.getSql(), sql.getArgs());
+		sqlExecutor.update(sql.getSql(), sql.getArgs());
 
 		return fileObject;
 	}
@@ -343,6 +354,6 @@ public class FileObjectService{
 		Preconditions.checkArgument(targetEntity != null && targetEntity.getId() != null, "Entity id is required.");
 		Long targetId = targetEntity.getId();
 		SQLReady sqlReady = new SQLReady("select url from file_object where target_id = ? and target_class = ?", new Object[] { targetId, targetEntity.getClass().getSimpleName() });
-		return jdbcTemplate.queryForList(sqlReady.getSql(), String.class, new Object[] { targetId, targetEntity.getClass().getSimpleName() });
+		return sqlExecutor.query(sqlReady.getSql(), String.class, new Object[] { targetId, targetEntity.getClass().getSimpleName() });
 	}
 }
