@@ -144,28 +144,4 @@ public class FileAccessServlet extends HttpServlet {
     resp.setContentLength(Long.valueOf(fileService.getContentLength(uri)).intValue());
   }
 
-  /**
-   * 根据不同的浏览器，对String进行URL编码
-   * 
-   * @return
-   */
-  @SuppressWarnings("unused")
-  private String encodeURIComp(String str, HttpServletRequest req) {
-    Boolean isMozilla = false;
-    String userAgent = req.getHeader("user-agent");
-    if (userAgent == null) {
-      userAgent = req.getHeader("USER-AGENT");
-    }
-    isMozilla = userAgent != null && userAgent.toLowerCase().indexOf("firefox") >= 0;
-    try {
-      if (!isMozilla) {
-        str = java.net.URLEncoder.encode(str, "UTF-8");
-      } else {
-        str = new String(str.getBytes("UTF-8"), "ISO-8859-1");
-      }
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
-    return str;
-  }
 }
