@@ -23,7 +23,7 @@ import com.github.catstiger.common.util.UUIDHex;
 import com.github.catstiger.multipart.model.FileObject;
 import com.github.catstiger.multipart.service.FileObjectService;
 import com.github.catstiger.multipart.service.FileService;
-import com.github.catstiger.multipart.service.impl.OssFileService;
+import com.github.catstiger.multipart.service.impl.OSSFileService;
 import com.github.catstiger.websecure.subject.Subject;
 import com.github.catstiger.websecure.user.model.User;
 import com.github.catstiger.websecure.web.SubjectHolder;
@@ -86,7 +86,7 @@ public class AbstractUploadServlet extends HttpServlet {
 				fileItem.write(targetFile); // 写文件
 
 				// 如存储到了云,则删除targetFile(本地没必要保存)--目前是有OssFileService,如果再增加其他云文件服务,则需要再增加判断
-				if (fileService instanceof OssFileService) {
+				if (fileService instanceof OSSFileService) {
 					fileObject = fileObjectService.create(targetFile, filename, SubjectHolder.getSubject().getPrincipal().getName());
 					if (targetFile.exists()) {
 						targetFile.delete();

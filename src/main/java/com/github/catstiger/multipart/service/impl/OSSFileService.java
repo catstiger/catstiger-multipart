@@ -30,8 +30,8 @@ import com.github.catstiger.common.util.ContentTypes;
 import com.github.catstiger.common.util.UUIDHex;
 
 @Component
-public class OssFileService extends AbstractFileService {
-  private static Logger logger = LoggerFactory.getLogger(OssFileService.class);
+public class OSSFileService extends AbstractFileService {
+  private static Logger logger = LoggerFactory.getLogger(OSSFileService.class);
 
   @Resource
   private OSSClient ossClient;
