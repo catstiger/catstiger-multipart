@@ -109,7 +109,7 @@ public class FileObjectService{
 		Preconditions.checkNotNull(targetClass);
 		Preconditions.checkNotNull(targetId);
 		SQLReady sql = new SQLRequest(FileObject.class, true).select()
-		    .where("target_id = ? AND target_class=?", targetId, targetClass)
+		    .where("target_id = ? AND target_class=?", true, targetId, targetClass)
 		    .orderBy("name", SQLReady.ASC);
 		return sqlExecutor.query(sql.getSql(), new BeanPropertyRowMapper<FileObject>(FileObject.class), sql.getArgs());
 	}
