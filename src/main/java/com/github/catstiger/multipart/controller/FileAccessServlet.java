@@ -32,6 +32,8 @@ import com.github.catstiger.multipart.service.FileService;
  * 
  */
 public class FileAccessServlet extends HttpServlet {
+  private static final long serialVersionUID = 7581802655256306989L;
+
   private static Logger logger = LoggerFactory.getLogger(FileAccessServlet.class);
 
   private FileService fileService;
