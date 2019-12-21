@@ -23,7 +23,6 @@ import com.github.catstiger.common.util.UUIDHex;
 import com.github.catstiger.multipart.model.FileObject;
 import com.github.catstiger.multipart.service.FileObjectService;
 import com.github.catstiger.multipart.service.FileService;
-import com.github.catstiger.multipart.service.impl.OSSFileService;
 import com.github.catstiger.websecure.subject.Subject;
 import com.github.catstiger.websecure.user.model.User;
 import com.github.catstiger.websecure.web.SubjectHolder;
@@ -48,6 +47,7 @@ public class AbstractUploadServlet extends HttpServlet {
 
 		context = WebApplicationContextUtils.getRequiredWebApplicationContext(config.getServletContext());
 		fileService = context.getBean(FileService.class);
+		logger.info("应用的FileService {}", fileService.getClass().getName());
 		fileObjectService = context.getBean(FileObjectService.class);
 	}
 
@@ -85,17 +85,17 @@ public class AbstractUploadServlet extends HttpServlet {
 				File targetFile = new File(repository.getPath() + File.separator + shortGeneratedFilename);
 				fileItem.write(targetFile); // 写文件
 
-				// 如存储到了云,则删除targetFile(本地没必要保存)--目前是有OssFileService,如果再增加其他云文件服务,则需要再增加判断
-				if (fileService instanceof OSSFileService) {
-					fileObject = fileObjectService.create(targetFile, filename, SubjectHolder.getSubject().getPrincipal().getName());
-					if (targetFile.exists()) {
-						targetFile.delete();
-					}
-				} else {// 如果不是存储到云,则targetFile即为本地目标文件,仅需保存FileObject
+				
+				if (fileService instanceof FileObjectService) {// 如果不是存储到云,则targetFile即为本地目标文件,仅需保存FileObject
 					User user = (User) SubjectHolder.getSubject().getPrincipal();
 					String userName = ((user == null) ? null : user.getUsername());
 					String url = fileService.makeUrl(shortGeneratedFilename, userName);
 					fileObject = fileObjectService.create(targetFile, url, filename, SubjectHolder.getSubject().getPrincipal().getName());
+				} else {// 如存储到了云,则删除targetFile(本地没必要保存)--目前是有OssFileService,如果再增加其他云文件服务,则需要再增加判断
+				  fileObject = fileObjectService.create(targetFile, filename, SubjectHolder.getSubject().getPrincipal().getName());
+          if (targetFile.exists()) {
+            targetFile.delete();
+          }
 				}
 			}
 		}
